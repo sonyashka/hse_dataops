@@ -20,6 +20,16 @@ spec:
         ports:
         - containerPort: 80
           name: http
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "250m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
         startupProbe:
           httpGet:
             path: /
@@ -59,6 +69,10 @@ spec:
           subPath: nginx.conf
           readOnly: true
       volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 128Mi
       - name: nginx-config
         configMap:
           name: nginx-config
