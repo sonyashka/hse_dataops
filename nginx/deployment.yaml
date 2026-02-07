@@ -1,78 +1,62 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx-deployment
+  name: {{ include "nginx-helm.name" . }}
   labels:
-    app: nginx
+    {{- include "nginx-helm.labels" . | nindent 4 }}
 spec:
-  replicas: 3
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: nginx
+      {{- include "nginx-helm.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app: nginx
+        {{- include "nginx-helm.selectorLabels" . | nindent 8 }}
+      {{- if .Values.podAnnotations }}
+      annotations:
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
     spec:
       containers:
-      - name: nginx
-        image: nginx:1.21-alpine
-        ports:
-        - containerPort: 80
-          name: http
-        volumeMounts:
-        - name: dshm
-          mountPath: /dev/shm
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "250m"
-          limits:
-            memory: "256Mi"
-            cpu: "500m"
-        startupProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 5
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 30
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 3
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
-          successThreshold: 1
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-          successThreshold: 1
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "250m"
-          limits:
-            memory: "128Mi"
-            cpu: "500m"
-        volumeMounts:
-        - name: nginx-config
-          mountPath: /etc/nginx/nginx.conf
-          subPath: nginx.conf
-          readOnly: true
+        - name: {{ .Chart.Name }}
+          image: {{ include "nginx-helm.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 80
+              name: http
+          {{- if .Values.resources.enabled }}
+          resources:
+            {{- if .Values.resources.limits }}
+            limits:
+              {{- toYaml .Values.resources.limits | nindent 14 }}
+            {{- end }}
+            {{- if .Values.resources.requests }}
+            requests:
+              {{- toYaml .Values.resources.requests | nindent 14 }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.configMap.enabled }}
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          {{- end }}
+      {{- if .Values.configMap.enabled }}
       volumes:
-      - name: dshm
-        emptyDir:
-          medium: Memory
-          sizeLimit: 128Mi
-      - name: nginx-config
-        configMap:
-          name: nginx-config
+        - name: nginx-config
+          configMap:
+            name: {{ include "nginx-helm.name" . }}-config
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

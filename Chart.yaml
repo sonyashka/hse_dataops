@@ -1,0 +1,6 @@
+apiVersion: v2
+name: nginx-helm
+description: A Helm chart for nginx with configurable options
+version: 1.0.0
+appVersion: "1.25.3"
+type: application
