@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  jupyterhub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jupyterhub-server
+    restart: unless-stopped
+    ports:
+      - "${JUPYTERHUB_PORT:-8000}:8000"
+    environment:
+      - JUPYTERHUB_ADMIN_USER=${JUPYTERHUB_ADMIN_USER:-admin}
+      - JUPYTERHUB_ADMIN_PASSWORD=${JUPYTERHUB_ADMIN_PASSWORD:-admin}
+      - JUPYTERHUB_COOKIE_SECRET=${JUPYTERHUB_COOKIE_SECRET}
+      - JUPYTERHUB_PROXY_AUTH_TOKEN=${JUPYTERHUB_PROXY_AUTH_TOKEN}
+      - JUPYTERHUB_CRYPT_KEY=${JUPYTERHUB_CRYPT_KEY}
+      - POSTGRES_USER=${POSTGRES_USER:-jupyterhub}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-jupyterhub}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=${POSTGRES_DB:-jupyterhub}
+    volumes:
+      - jupyterhub_data:/srv/jupyterhub/data
+      - jupyterhub_log:/srv/jupyterhub/log
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./jupyterhub_config.py:/srv/jupyterhub/jupyterhub_config.py:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - jupyterhub-network
+
+  postgres:
+    image: postgres:15
+    container_name: jupyterhub-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-jupyterhub}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-jupyterhub}
+      - POSTGRES_DB=${POSTGRES_DB:-jupyterhub}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jupyterhub} -d ${POSTGRES_DB:-jupyterhub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - jupyterhub-network
+
+volumes:
+  jupyterhub_data:
+    name: jupyterhub_data
+  jupyterhub_log:
+    name: jupyterhub_log
+  postgres_data:
+    name: postgres_data
+
+networks:
+  jupyterhub-network:
+    name: jupyterhub-network
+    driver: bridge
