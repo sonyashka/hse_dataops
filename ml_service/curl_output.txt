@@ -1,0 +1,67 @@
+curl -X POST "http://localhost:8000/api/v1/predict" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "age": 0.0380759064334241,
+    "sex": 0.0506801187398187,
+    "bmi": 0.0616962065186835,
+    "bp": 0.0218723850763034,
+    "s1": -0.0442234984244467,
+    "s2": -0.0348207628376988,
+    "s3": -0.0434008456520269,
+    "s4": -0.00259226199818282,
+    "s5": 0.0199074861610772,
+    "s6": -0.0176461251598053
+  }'
+
+# Ответ: {"predict":151.23}
+
+curl -X POST "http://localhost:8000/api/v1/predict" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "age": 0.0,
+    "sex": 0.0,
+    "bmi": 0.0,
+    "bp": 0.0,
+    "s1": 0.0,
+    "s2": 0.0,
+    "s3": 0.0,
+    "s4": 0.0,
+    "s5": 0.0,
+    "s6": 0.0
+  }'
+
+# Ответ: {"predict":152.76}
+
+curl -X POST "http://localhost:8000/api/v1/predict" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "age": 0.1,
+    "sex": 1.0,
+    "bmi": 0.2,
+    "bp": 0.15,
+    "s1": 0.1,
+    "s2": 0.1,
+    "s3": -0.1,
+    "s4": 0.05,
+    "s5": 0.2,
+    "s6": 0.1
+  }'
+
+# Ответ: {"predict":267.89}
+
+curl -X POST "http://localhost:8000/api/v1/predict" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "age": -0.1,
+    "sex": 0.0,
+    "bmi": -0.15,
+    "bp": -0.1,
+    "s1": -0.1,
+    "s2": -0.1,
+    "s3": 0.1,
+    "s4": -0.05,
+    "s5": -0.15,
+    "s6": -0.1
+  }'
+
+# Ответ: {"predict":98.34}
