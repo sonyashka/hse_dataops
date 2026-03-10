@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'monitoring'
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          environment: 'production'
+
+  - job_name: 'fastapi-service'
+    scrape_interval: 10s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['host.docker.internal:8000']  # Для доступа к сервису на хосте
+        labels:
+          service: 'fastapi'
+          environment: 'production'
