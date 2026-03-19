@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: mlflow-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres_password123
+      - POSTGRES_DB=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mlflow-network
+
+  # mlflow:
+  #   build: .
+  #   container_name: mlflow-server
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   environment:
+  #     - POSTGRES_USER=${MLFLOW_POSTGRES_USER}
+  #     - POSTGRES_PASSWORD=${MLFLOW_POSTGRES_PASSWORD}
+  #     - POSTGRES_DB=${MLFLOW_POSTGRES_DB}
+  #     - POSTGRES_HOST=postgres
+  #     - POSTGRES_PORT=5432
+  #   volumes:
+  #     - mlflow_artifacts:/mlflow/artifacts
+  #   ports:
+  #     - "5000:5000"
+  #   networks:
+  #     - mlflow-network
+  #   command: ["postgres"]
+
+  airflow-webserver:
+    build: ./airflow
+    container_name: airflow-webserver
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_POSTGRES_USER}:${AIRFLOW_POSTGRES_PASSWORD}@postgres:5432/${AIRFLOW_POSTGRES_DB}
+      - AIRFLOW__CORE__EXECUTOR=${AIRFLOW__CORE__EXECUTOR}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=${AIRFLOW__CORE__LOAD_EXAMPLES}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - AIRFLOW__WEBSERVER__PORT=${AIRFLOW__WEBSERVER__PORT}
+      - AIRFLOW__CORE__FERNET_KEY=
+      - AIRFLOW__WEBSERVER__WORKERS=2
+      - AIRFLOW__WEBSERVER__WORKER_TIMEOUT=120
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+      - AIRFLOW_POSTGRES_USER=${AIRFLOW_POSTGRES_USER}
+      - AIRFLOW_POSTGRES_PASSWORD=${AIRFLOW_POSTGRES_PASSWORD}
+      - AIRFLOW_POSTGRES_DB=${AIRFLOW_POSTGRES_DB}
+      - POSTGRES_HOST=postgres
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/config:/opt/airflow/config
+    ports:
+      - "8080:8080"
+    networks:
+      - mlflow-network
+    command: >
+      bash -c "
+        /wait-for-airflow-db.sh postgres &&
+        airflow db init &&
+        airflow db migrate &&
+        airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin &&
+        airflow webserver
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    build: ./airflow
+    container_name: airflow-scheduler
+    restart: unless-stopped
+    depends_on:
+      airflow-webserver:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_POSTGRES_USER}:${AIRFLOW_POSTGRES_PASSWORD}@postgres:5432/${AIRFLOW_POSTGRES_DB}
+      - AIRFLOW__CORE__EXECUTOR=${AIRFLOW__CORE__EXECUTOR}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=${AIRFLOW__CORE__LOAD_EXAMPLES}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - AIRFLOW__WEBSERVER__PORT=${AIRFLOW__WEBSERVER__PORT}
+      - AIRFLOW__CORE__FERNET_KEY=
+      - AIRFLOW__WEBSERVER__WORKERS=2
+      - AIRFLOW__WEBSERVER__WORKER_TIMEOUT=120
+      - AIRFLOW_POSTGRES_USER=${AIRFLOW_POSTGRES_USER}
+      - AIRFLOW_POSTGRES_PASSWORD=${AIRFLOW_POSTGRES_PASSWORD}
+      - AIRFLOW_POSTGRES_DB=${AIRFLOW_POSTGRES_DB}
+      - POSTGRES_HOST=postgres
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/config:/opt/airflow/config
+    networks:
+      - mlflow-network
+    command: >
+      bash -c "
+        /wait-for-airflow-db.sh postgres &&
+        airflow scheduler
+      "
+
+  airflow-triggerer:
+    build: ./airflow
+    container_name: airflow-triggerer
+    restart: unless-stopped
+    depends_on:
+      airflow-webserver:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_POSTGRES_USER}:${AIRFLOW_POSTGRES_PASSWORD}@postgres:5432/${AIRFLOW_POSTGRES_DB}
+      - AIRFLOW__CORE__EXECUTOR=${AIRFLOW__CORE__EXECUTOR}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=${AIRFLOW__CORE__LOAD_EXAMPLES}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - AIRFLOW__WEBSERVER__PORT=${AIRFLOW__WEBSERVER__PORT}
+      - AIRFLOW__CORE__FERNET_KEY=
+      - AIRFLOW__WEBSERVER__WORKERS=2
+      - AIRFLOW__WEBSERVER__WORKER_TIMEOUT=120
+      - AIRFLOW_POSTGRES_USER=${AIRFLOW_POSTGRES_USER}
+      - AIRFLOW_POSTGRES_PASSWORD=${AIRFLOW_POSTGRES_PASSWORD}
+      - AIRFLOW_POSTGRES_DB=${AIRFLOW_POSTGRES_DB}
+      - POSTGRES_HOST=postgres
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/config:/opt/airflow/config
+    networks:
+      - mlflow-network
+    command: >
+      bash -c "
+        /wait-for-airflow-db.sh postgres &&
+        airflow triggerer
+      "
+
+volumes:
+  postgres_data:
+  mlflow_artifacts:
+
+networks:
+  mlflow-network:
+    driver: bridge

@@ -1,0 +1,6 @@
+# Дополнительные пакеты для DAGов
+pandas
+numpy
+scikit-learn
+psycopg2-binary
+mlflow
