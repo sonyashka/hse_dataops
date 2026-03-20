@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  jupyterhub:
+    build: .
+    container_name: jupyterhub
+    ports:
+      - "${HUB_PORT:-8000}:8000"
+    environment:
+      - JUPYTERHUB_CRYPT_KEY=${JUPYTERHUB_CRYPT_KEY}
+      - JUPYTERHUB_ADMIN_USERS=${JUPYTERHUB_ADMIN_USERS}
+      - JUPYTERHUB_ALLOWED_USERS=${JUPYTERHUB_ALLOWED_USERS}
+    volumes:
+      - ./jupyterhub_data:/home/jupyter/work
+      - ./jupyterhub_config.py:/etc/jupyterhub/jupyterhub_config.py:ro
+      - ./users:/etc/jupyterhub/users
+    restart: unless-stopped
+    networks:
+      - jupyterhub-network
+
+networks:
+  jupyterhub-network:
+    driver: bridge

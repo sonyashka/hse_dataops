@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: lakefs-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - lakefs-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: lakefs-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - lakefs-network
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: lakefs-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+    entrypoint: >
+      /bin/sh -c "
+        echo '=== Initializing MinIO ===';
+        sleep 5;
+        mc alias set localminio http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
+        mc mb localminio/$$MINIO_BUCKET --ignore-existing;
+        mc admin info localminio;
+        echo 'MinIO bucket $$MINIO_BUCKET is ready';
+        exit 0;
+      "
+    networks:
+      - lakefs-network
+
+  lakefs:
+    build: ./lakefs
+    container_name: lakefs-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      # PostgreSQL connection
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: lakefs
+      POSTGRES_PASSWORD: lakefs123
+      POSTGRES_DB: lakefs
+      POSTGRES_PORT: 5432
+      
+      # LakeFS configuration
+      LAKEFS_AUTH_ENCRYPT_SECRET_KEY: ${LAKEFS_AUTH_ENCRYPT_SECRET_KEY}
+      LAKEFS_DATABASE_TYPE: postgres
+      LAKEFS_DATABASE_POSTGRES_CONNECTION_STRING: postgres://lakefs:lakefs123@postgres:5432/lakefs?sslmode=disable
+      LAKEFS_BLOCKSTORE_TYPE: s3
+      LAKEFS_BLOCKSTORE_S3_ENDPOINT: http://minio:9000
+      LAKEFS_BLOCKSTORE_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      LAKEFS_BLOCKSTORE_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      LAKEFS_BLOCKSTORE_S3_FORCE_PATH_STYLE: true
+      LAKEFS_BLOCKSTORE_S3_DISABLE_SSL: true
+      LAKEFS_BLOCKSTORE_S3_BUCKET_NAME: ${MINIO_BUCKET}
+      LAKEFS_GATEWAYS_S3_DOMAIN_NAME: localhost:8000
+      LAKEFS_LOGGING_LEVEL: ${LAKEFS_LOGGING_LEVEL}
+      LAKEFS_UI_ENABLED: ${LAKEFS_UI_ENABLED}
+    ports:
+      - "8000:8000"
+    networks:
+      - lakefs-network
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  lakefs-network:
+    driver: bridge

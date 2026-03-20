@@ -1,0 +1,6 @@
+{
+  "prediction": 0.6224593312018546,
+  "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "processing_time_ms": 45.23,
+  "model_version": "1.0.0"
+}

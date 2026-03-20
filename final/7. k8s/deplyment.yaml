@@ -1,0 +1,147 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-service
+  namespace: ml-service
+  labels:
+    app: ml-service
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ml-service
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: ml-service
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: ml-service
+        image: ml-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: DB_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: ml-service-config
+              key: DB_PATH
+        - name: MODEL_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: ml-service-config
+              key: MODEL_VERSION
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: ml-service-config
+              key: LOG_LEVEL
+        - name: PYTHONUNBUFFERED
+          valueFrom:
+            configMapKeyRef:
+              name: ml-service-config
+              key: PYTHONUNBUFFERED
+        
+        # Resource limits and requests
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        # Volume mounts
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+          subPath: data
+        - name: logs
+          mountPath: /app/logs
+          subPath: logs
+        
+        # Probe configurations
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 30
+          successThreshold: 1
+          timeoutSeconds: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+          timeoutSeconds: 3
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 20
+          failureThreshold: 3
+          successThreshold: 1
+          timeoutSeconds: 3
+        
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+        
+        # Lifecycle hooks
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+      
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: ml-service-data-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: ml-service-logs-pvc
+      
+      # Node selection
+      nodeSelector:
+        kubernetes.io/os: linux
+      
+      # Affinity rules for better distribution
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - ml-service
+              topologyKey: kubernetes.io/hostname
+      
+      # Termination grace period
+      terminationGracePeriodSeconds: 30

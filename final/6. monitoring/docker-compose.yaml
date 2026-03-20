@@ -1,0 +1,73 @@
+version: '3.8'
+
+networks:
+  ml-network:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+services:
+  # ML Сервис
+  ml-service:
+    build: ./ml-service
+    container_name: ml-service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./5. ml-service/app:/app/app
+      - ./5. ml-service/logs:/app/logs
+      - ./5. ml-service/data:/app/data
+    environment:
+      - DB_PATH=/app/data/predictions.db
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - ml-network
+    labels:
+      - "prometheus.scrape=true"
+      - "prometheus.port=8000"
+      - "prometheus.path=/metrics"
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - ml-network
+    depends_on:
+      - ml-service
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    restart: unless-stopped
+    networks:
+      - ml-network
+    depends_on:
+      - prometheus

@@ -1,0 +1,51 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'ml-service-monitor'
+    environment: 'production'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Rule files
+rule_files:
+  - "alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Сам Prometheus
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          environment: 'production'
+
+  # ML Сервис
+  - job_name: 'ml-service'
+    scrape_interval: 5s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['ml-service:8000']
+        labels:
+          service: 'ml-service'
+          environment: 'production'
+          version: '1.0.0'
+    
+    # Метрики для отслеживания
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'predict_.*|http_.*|db_.*|model_.*|active_requests'
+        action: keep
+
+  # Дополнительный job для метрик хоста (опционально)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node-exporter'
+    scrape_interval: 30s
